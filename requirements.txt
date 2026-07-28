@@ -1,0 +1,7 @@
+discord.py>=2.4.0
+SQLAlchemy>=2.0
+aiosqlite>=0.20        # driver assíncrono do SQLite (usado pelo SQLAlchemy async)
+python-dotenv>=1.0
+httpx>=0.27             # Steam Web API e futuros gateways de pagamento
+fastapi>=0.111           # servidor do callback Steam OpenID
+uvicorn[standard]>=0.30

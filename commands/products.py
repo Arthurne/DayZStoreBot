@@ -45,7 +45,7 @@ class ProdutoGroup(app_commands.Group):
         )
         await shop_channels.sync_product_message(self.bot, product)
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"✅ Produto **{product.name}** criado em **{product.category}**.", ephemeral=True
         )
         logger.info("Produto '%s' criado por %s (id=%s)", product.name, interaction.user, interaction.user.id)
@@ -85,11 +85,11 @@ class ProdutoGroup(app_commands.Group):
                 image_url=data["image_url"],
             )
             if product is None:
-                await interaction.response.send_message("⚠ Produto não encontrado (pode ter sido removido).", ephemeral=True)
+                await interaction.followup.send("⚠ Produto não encontrado (pode ter sido removido).", ephemeral=True)
                 return
 
             await shop_channels.sync_product_message(self.bot, product)
-            await interaction.response.send_message(f"✅ Produto **{product.name}** atualizado.", ephemeral=True)
+            await interaction.followup.send(f"✅ Produto **{product.name}** atualizado.", ephemeral=True)
             logger.info("Produto '%s' (id=%s) editado por %s", product.name, product_id, interaction.user)
 
         return handler
@@ -102,12 +102,18 @@ class ProdutoGroup(app_commands.Group):
             await interaction.response.send_message(f"⚠ Produto **{nome}** não encontrado.", ephemeral=True)
             return
 
-        removed = await products_service.delete_product(product.id)
-        await shop_channels.delete_product_message(
-            self.bot, channel_id=removed.channel_id, message_id=removed.message_id
-        )
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            removed = await products_service.delete_product(product.id)
+            await shop_channels.delete_product_message(
+                self.bot, channel_id=removed.channel_id, message_id=removed.message_id
+            )
+        except Exception:
+            logger.exception("Erro ao remover produto '%s'", nome)
+            await interaction.followup.send("⚠ Ocorreu um erro ao remover o produto. Verifique os logs.", ephemeral=True)
+            return
 
-        await interaction.response.send_message(f"🗑 Produto **{nome}** removido definitivamente.", ephemeral=True)
+        await interaction.followup.send(f"🗑 Produto **{nome}** removido definitivamente.", ephemeral=True)
         logger.info("Produto '%s' removido por %s", nome, interaction.user)
 
     @app_commands.command(name="desativar", description="Ativar/desativar um produto (sem apagar) pelo nome")
@@ -118,11 +124,17 @@ class ProdutoGroup(app_commands.Group):
             await interaction.response.send_message(f"⚠ Produto **{nome}** não encontrado.", ephemeral=True)
             return
 
-        updated = await products_service.set_active(product.id, not product.is_active)
-        await shop_channels.sync_product_message(self.bot, updated)
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            updated = await products_service.set_active(product.id, not product.is_active)
+            await shop_channels.sync_product_message(self.bot, updated)
+        except Exception:
+            logger.exception("Erro ao (des)ativar produto '%s'", nome)
+            await interaction.followup.send("⚠ Ocorreu um erro ao atualizar o produto. Verifique os logs.", ephemeral=True)
+            return
 
         status = "ativado ✅" if updated.is_active else "desativado ⛔"
-        await interaction.response.send_message(f"Produto **{updated.name}** {status}.", ephemeral=True)
+        await interaction.followup.send(f"Produto **{updated.name}** {status}.", ephemeral=True)
         logger.info("Produto '%s' %s por %s", updated.name, status, interaction.user)
 
 
@@ -187,10 +199,10 @@ async def start_edit_flow(interaction: discord.Interaction, product_id: int) -> 
             image_url=data["image_url"],
         )
         if updated is None:
-            await modal_interaction.response.send_message("⚠ Produto não encontrado (pode ter sido removido).", ephemeral=True)
+            await modal_interaction.followup.send("⚠ Produto não encontrado (pode ter sido removido).", ephemeral=True)
             return
         await shop_channels.sync_product_message(bot, updated)
-        await modal_interaction.response.send_message(f"✅ Produto **{updated.name}** atualizado.", ephemeral=True)
+        await modal_interaction.followup.send(f"✅ Produto **{updated.name}** atualizado.", ephemeral=True)
         logger.info("Produto '%s' (id=%s) editado por %s", updated.name, product_id, modal_interaction.user)
 
     await start_product_modal(interaction, on_complete=handler, defaults=defaults, editing=True)
@@ -200,15 +212,22 @@ async def handle_delete_click(interaction: discord.Interaction, product_id: int)
     product = await products_service.get_product_by_id(product_id)
     name = product.name if product else "produto"
 
-    removed = await products_service.delete_product(product_id)
-    if removed is None:
-        await interaction.response.send_message("⚠ Produto não encontrado (já removido).", ephemeral=True)
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        removed = await products_service.delete_product(product_id)
+        if removed is None:
+            await interaction.followup.send("⚠ Produto não encontrado (já removido).", ephemeral=True)
+            return
+
+        await shop_channels.delete_product_message(
+            interaction.client, channel_id=removed.channel_id, message_id=removed.message_id
+        )
+    except Exception:
+        logger.exception("Erro ao remover produto '%s' (via /produtos)", name)
+        await interaction.followup.send("⚠ Ocorreu um erro ao remover o produto. Verifique os logs.", ephemeral=True)
         return
 
-    await shop_channels.delete_product_message(
-        interaction.client, channel_id=removed.channel_id, message_id=removed.message_id
-    )
-    await interaction.response.send_message(f"🗑 Produto **{name}** removido definitivamente.", ephemeral=True)
+    await interaction.followup.send(f"🗑 Produto **{name}** removido definitivamente.", ephemeral=True)
     logger.info("Produto '%s' removido por %s (via /produtos)", name, interaction.user)
 
 
@@ -218,11 +237,17 @@ async def handle_toggle_click(interaction: discord.Interaction, product_id: int)
         await interaction.response.send_message("⚠ Produto não encontrado.", ephemeral=True)
         return
 
-    updated = await products_service.set_active(product_id, not product.is_active)
-    await shop_channels.sync_product_message(interaction.client, updated)
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        updated = await products_service.set_active(product_id, not product.is_active)
+        await shop_channels.sync_product_message(interaction.client, updated)
+    except Exception:
+        logger.exception("Erro ao (des)ativar produto id=%s (via /produtos)", product_id)
+        await interaction.followup.send("⚠ Ocorreu um erro ao atualizar o produto. Verifique os logs.", ephemeral=True)
+        return
 
     status = "ativado ✅" if updated.is_active else "desativado ⛔"
-    await interaction.response.send_message(f"Produto **{updated.name}** {status}.", ephemeral=True)
+    await interaction.followup.send(f"Produto **{updated.name}** {status}.", ephemeral=True)
     logger.info("Produto '%s' %s por %s (via /produtos)", updated.name, status, interaction.user)
 
 

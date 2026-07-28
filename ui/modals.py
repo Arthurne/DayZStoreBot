@@ -11,9 +11,12 @@ segundo — se o usuário fechar o segundo modal sem enviar, nada é salvo.
 
 from __future__ import annotations
 
+import logging
 from typing import Awaitable, Callable
 
 import discord
+
+logger = logging.getLogger(__name__)
 
 OnComplete = Callable[[discord.Interaction, dict], Awaitable[None]]
 
@@ -46,7 +49,23 @@ class ProductModalStep2(discord.ui.Modal):
         image_url = str(self.image_url.value or "").strip() or None
 
         full_data = {**self._step1_data, "items": items, "image_url": image_url}
-        await self._on_complete(interaction, full_data)
+
+        # Deferir JÁ, antes de chamar on_complete: criar categoria/canal e
+        # postar a mensagem de venda no Discord envolve várias chamadas
+        # sequenciais à API e facilmente passa dos 3s que o Discord dá pra
+        # responder a uma interação. Sem isso, a interação "falha" no
+        # cliente (This interaction failed) mesmo quando o produto acaba
+        # sendo criado por trás — e, pior, sem nenhum aviso claro do erro.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        try:
+            await self._on_complete(interaction, full_data)
+        except Exception:
+            logger.exception("Erro ao salvar produto (nome='%s')", full_data.get("name"))
+            await interaction.followup.send(
+                "⚠ Ocorreu um erro ao salvar o produto. Verifique os logs do bot e tente novamente.",
+                ephemeral=True,
+            )
 
 
 class ProductModalStep1(discord.ui.Modal):

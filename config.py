@@ -123,7 +123,7 @@ def load_settings() -> Settings:
         steam_openid_return_url=os.getenv("STEAM_OPENID_RETURN_URL", ""),
         web_host=os.getenv("WEB_HOST", "0.0.0.0"),
         web_port=int(os.getenv("WEB_PORT", "8000")),
-        database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./dayz_store.db"),
+        database_url=os.getenv("BOT_DATABASE_URL", "sqlite+aiosqlite:///./dayz_store.db"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
     )
 

@@ -5,3 +5,10 @@ python-dotenv>=1.0
 httpx>=0.27             # Steam Web API e futuros gateways de pagamento
 fastapi>=0.111           # servidor do callback Steam OpenID
 uvicorn[standard]>=0.30
+aiosqlite
+discord.py
+fastapi
+httpx
+python-dotenv
+SQLAlchemy
+uvicorn[standard]
